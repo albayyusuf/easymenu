@@ -1,0 +1,715 @@
+<div class="orders-container">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-content">
+      <div class="header-info">
+        <h1>
+          <i class="fas fa-shopping-cart"></i>
+          Sipariş Yönetimi
+        </h1>
+        <p>Siparişleri görüntüleyin ve yönetin</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" (click)="openCreateModal()">
+          <i class="fas fa-plus"></i>
+          Yeni Sipariş
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="search-section">
+    <form [formGroup]="searchForm" class="search-form">
+      <div class="search-group">
+        <div class="search-input">
+          <i class="fas fa-search"></i>
+          <input
+            type="text"
+            formControlName="search"
+            placeholder="Müşteri adı, telefon, email veya sipariş ID ile ara..."
+          />
+        </div>
+        <div class="filter-select" *ngIf="isAdmin">
+          <select formControlName="companyId" (change)="loadBranches()">
+            <option value="">Tüm Şirketler</option>
+            <option *ngFor="let company of companies" [value]="company.id">
+              {{ company.name }}
+            </option>
+          </select>
+        </div>
+        <div class="filter-select">
+          <select formControlName="branchId">
+            <option value="">Tüm Şubeler</option>
+            <option *ngFor="let branch of branches" [value]="branch.id">
+              {{ branch.name }}
+            </option>
+          </select>
+        </div>
+        <div class="filter-select">
+          <select formControlName="status">
+            <option value="all">Tüm Durumlar</option>
+            <option *ngFor="let status of orderStatuses" [value]="status.value">
+              {{ status.label }}
+            </option>
+          </select>
+        </div>
+        <div class="filter-select">
+          <select formControlName="paymentStatus">
+            <option value="all">Tüm Ödeme Durumları</option>
+            <option *ngFor="let status of paymentStatuses" [value]="status.value">
+              {{ status.label }}
+            </option>
+          </select>
+        </div>
+        <div class="date-filters">
+          <input
+            type="date"
+            formControlName="dateFrom"
+            placeholder="Başlangıç Tarihi"
+          />
+          <input
+            type="date"
+            formControlName="dateTo"
+            placeholder="Bitiş Tarihi"
+          />
+        </div>
+        <div class="table-filter">
+          <input
+            type="text"
+            formControlName="tableNumber"
+            placeholder="Masa No"
+          />
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="loading">
+    <div class="spinner"></div>
+    <p>Siparişler yükleniyor...</p>
+  </div>
+
+  <!-- Error Message -->
+  <div class="alert alert-error" *ngIf="error && !loading">
+    <i class="fas fa-exclamation-circle"></i>
+    {{ error }}
+    <button class="btn-retry" (click)="loadOrders()">
+      <i class="fas fa-redo"></i>
+      Tekrar Dene
+    </button>
+  </div>
+
+  <!-- Success Message -->
+  <div class="alert alert-success" *ngIf="success">
+    <i class="fas fa-check-circle"></i>
+    {{ success }}
+  </div>
+
+  <!-- Orders Table -->
+  <div class="orders-content" *ngIf="!loading && !error">
+    <div class="orders-header">
+      <h3>
+        <i class="fas fa-list"></i>
+        Siparişler ({{ filteredOrders.length }})
+      </h3>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="table-container" *ngIf="paginatedOrders.length > 0">
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th>Sipariş No</th>
+            <th>Müşteri</th>
+            <th>Masa</th>
+            <th *ngIf="isAdmin">Şirket</th>
+            <th>Şube</th>
+            <th>Tutar</th>
+            <th>Durum</th>
+            <th>Ödeme</th>
+            <th>Tarih</th>
+            <th>İşlemler</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let order of paginatedOrders" class="order-row">
+            <td class="order-number">
+              <strong>{{ order.orderNumber }}</strong>
+            </td>
+            <td class="customer-info">
+              <div class="customer-name">{{ order.customerName || 'Anonim' }}</div>
+              <div class="customer-contact" *ngIf="order.customerPhone">
+                <i class="fas fa-phone"></i>
+                {{ order.customerPhone }}
+              </div>
+              <div class="customer-contact" *ngIf="order.customerEmail">
+                <i class="fas fa-envelope"></i>
+                {{ order.customerEmail }}
+              </div>
+            </td>
+            <td class="table-number">
+              <span class="table-badge" *ngIf="order.tableNumber">
+                <i class="fas fa-table"></i>
+                {{ order.tableNumber }}
+              </span>
+              <span *ngIf="!order.tableNumber" class="no-table">-</span>
+            </td>
+            <td class="company-info" *ngIf="isAdmin">
+              <span class="company-name">{{ getCompanyName(order.companyId) }}</span>
+            </td>
+            <td class="branch-info">
+              <span class="branch-name">{{ getBranchName(order.branchId) }}</span>
+            </td>
+            <td class="total-amount">
+              <strong class="price">{{ formatPrice(order.totalAmount) }}</strong>
+            </td>
+            <td class="order-status">
+              <div class="status-dropdown">
+                <select 
+                  [value]="order.status"
+                  (change)="updateOrderStatus(order, $event.target.value)"
+                  class="status-select"
+                  [class]="'status-' + order.status"
+                >
+                  <option *ngFor="let status of orderStatuses" [value]="status.value">
+                    {{ status.label }}
+                  </option>
+                </select>
+              </div>
+            </td>
+            <td class="payment-status">
+              <div class="payment-dropdown">
+                <select 
+                  [value]="order.paymentStatus"
+                  (change)="updatePaymentStatus(order, $event.target.value)"
+                  class="payment-select"
+                  [class]="'payment-' + order.paymentStatus"
+                >
+                  <option *ngFor="let status of paymentStatuses" [value]="status.value">
+                    {{ status.label }}
+                  </option>
+                </select>
+              </div>
+            </td>
+            <td class="order-date">
+              <div class="date-info">
+                <div class="date">{{ formatDate(order.createdAt) }}</div>
+              </div>
+            </td>
+            <td class="order-actions">
+              <button 
+                class="btn-action btn-details" 
+                (click)="openDetailsModal(order)"
+                title="Detaylar"
+              >
+                <i class="fas fa-eye"></i>
+              </button>
+              <button 
+                class="btn-action btn-edit" 
+                (click)="openEditModal(order)"
+                title="Düzenle"
+              >
+                <i class="fas fa-edit"></i>
+              </button>
+              <button 
+                class="btn-action btn-delete" 
+                (click)="openDeleteModal(order)"
+                title="Sil"
+                *ngIf="isAdmin || currentUser?.companyId === order.companyId"
+              >
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="filteredOrders.length === 0">
+      <i class="fas fa-shopping-cart"></i>
+      <h3>Sipariş Bulunamadı</h3>
+      <p>Arama kriterlerinize uygun sipariş bulunamadı.</p>
+      <button class="btn btn-primary" (click)="openCreateModal()">
+        <i class="fas fa-plus"></i>
+        İlk Siparişi Oluştur
+      </button>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="totalPages > 1">
+      <div class="pagination-info">
+        <span>
+          {{ (currentPage - 1) * itemsPerPage + 1 }} - 
+          {{ Math.min(currentPage * itemsPerPage, filteredOrders.length) }} 
+          / {{ filteredOrders.length }} sipariş
+        </span>
+      </div>
+      <div class="pagination">
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === 1"
+          (click)="goToPage(currentPage - 1)"
+        >
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        
+        <button 
+          *ngFor="let page of pages" 
+          class="btn-page"
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === totalPages"
+          (click)="goToPage(currentPage + 1)"
+        >
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal-overlay" *ngIf="showCreateModal || showEditModal" (click)="closeModals()">
+  <div class="modal modal-large" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-edit'"></i>
+        {{ showCreateModal ? 'Yeni Sipariş Oluştur' : 'Sipariş Düzenle' }}
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <form [formGroup]="orderForm" (ngSubmit)="showCreateModal ? createOrder() : updateOrder()">
+        <div class="form-row">
+          <!-- Company Selection (for admin) -->
+          <div class="form-group" *ngIf="isAdmin">
+            <label for="companyId">
+              <i class="fas fa-building"></i>
+              Şirket *
+            </label>
+            <select
+              id="companyId"
+              formControlName="companyId"
+              [class.error]="companyId?.invalid && companyId?.touched"
+              (change)="loadBranches()"
+            >
+              <option value="">Şirket seçin</option>
+              <option *ngFor="let company of companies" [value]="company.id">
+                {{ company.name }}
+              </option>
+            </select>
+            <div class="error-message" *ngIf="companyId?.invalid && companyId?.touched">
+              <span *ngIf="companyId?.errors?.['required']">Şirket seçimi gereklidir</span>
+            </div>
+          </div>
+
+          <!-- Branch Selection -->
+          <div class="form-group">
+            <label for="branchId">
+              <i class="fas fa-map-marker-alt"></i>
+              Şube
+            </label>
+            <select
+              id="branchId"
+              formControlName="branchId"
+            >
+              <option value="">Şube seçin</option>
+              <option *ngFor="let branch of branches" [value]="branch.id">
+                {{ branch.name }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <!-- Customer Name -->
+          <div class="form-group">
+            <label for="customerName">
+              <i class="fas fa-user"></i>
+              Müşteri Adı *
+            </label>
+            <input
+              type="text"
+              id="customerName"
+              formControlName="customerName"
+              placeholder="Müşteri adını girin"
+              [class.error]="customerName?.invalid && customerName?.touched"
+            />
+            <div class="error-message" *ngIf="customerName?.invalid && customerName?.touched">
+              <span *ngIf="customerName?.errors?.['required']">Müşteri adı gereklidir</span>
+              <span *ngIf="customerName?.errors?.['minlength']">Müşteri adı en az 2 karakter olmalıdır</span>
+            </div>
+          </div>
+
+          <!-- Table Number -->
+          <div class="form-group">
+            <label for="tableNumber">
+              <i class="fas fa-table"></i>
+              Masa Numarası
+            </label>
+            <input
+              type="text"
+              id="tableNumber"
+              formControlName="tableNumber"
+              placeholder="Masa numarasını girin"
+            />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <!-- Customer Phone -->
+          <div class="form-group">
+            <label for="customerPhone">
+              <i class="fas fa-phone"></i>
+              Telefon
+            </label>
+            <input
+              type="tel"
+              id="customerPhone"
+              formControlName="customerPhone"
+              placeholder="+90 (555) 123 45 67"
+            />
+          </div>
+
+          <!-- Customer Email -->
+          <div class="form-group">
+            <label for="customerEmail">
+              <i class="fas fa-envelope"></i>
+              Email
+            </label>
+            <input
+              type="email"
+              id="customerEmail"
+              formControlName="customerEmail"
+              placeholder="email@example.com"
+              [class.error]="customerEmail?.invalid && customerEmail?.touched"
+            />
+            <div class="error-message" *ngIf="customerEmail?.invalid && customerEmail?.touched">
+              <span *ngIf="customerEmail?.errors?.['email']">Geçerli bir email adresi girin</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <!-- Total Amount -->
+          <div class="form-group">
+            <label for="totalAmount">
+              <i class="fas fa-lira-sign"></i>
+              Toplam Tutar *
+            </label>
+            <input
+              type="number"
+              id="totalAmount"
+              formControlName="totalAmount"
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+              [class.error]="totalAmount?.invalid && totalAmount?.touched"
+            />
+            <div class="error-message" *ngIf="totalAmount?.invalid && totalAmount?.touched">
+              <span *ngIf="totalAmount?.errors?.['required']">Toplam tutar gereklidir</span>
+              <span *ngIf="totalAmount?.errors?.['min']">Tutar 0'dan küçük olamaz</span>
+            </div>
+          </div>
+
+          <!-- Order Status -->
+          <div class="form-group">
+            <label for="status">
+              <i class="fas fa-info-circle"></i>
+              Sipariş Durumu *
+            </label>
+            <select
+              id="status"
+              formControlName="status"
+              [class.error]="status?.invalid && status?.touched"
+            >
+              <option *ngFor="let status of orderStatuses" [value]="status.value">
+                {{ status.label }}
+              </option>
+            </select>
+            <div class="error-message" *ngIf="status?.invalid && status?.touched">
+              <span *ngIf="status?.errors?.['required']">Sipariş durumu seçimi gereklidir</span>
+            </div>
+          </div>
+
+          <!-- Payment Status -->
+          <div class="form-group">
+            <label for="paymentStatus">
+              <i class="fas fa-credit-card"></i>
+              Ödeme Durumu *
+            </label>
+            <select
+              id="paymentStatus"
+              formControlName="paymentStatus"
+              [class.error]="paymentStatus?.invalid && paymentStatus?.touched"
+            >
+              <option *ngFor="let status of paymentStatuses" [value]="status.value">
+                {{ status.label }}
+              </option>
+            </select>
+            <div class="error-message" *ngIf="paymentStatus?.invalid && paymentStatus?.touched">
+              <span *ngIf="paymentStatus?.errors?.['required']">Ödeme durumu seçimi gereklidir</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="form-group">
+          <label for="notes">
+            <i class="fas fa-sticky-note"></i>
+            Notlar
+          </label>
+          <textarea
+            id="notes"
+            formControlName="notes"
+            placeholder="Sipariş notlarını girin"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <!-- Error Message -->
+        <div class="alert alert-error" *ngIf="error">
+          <i class="fas fa-exclamation-circle"></i>
+          {{ error }}
+        </div>
+
+        <!-- Success Message -->
+        <div class="alert alert-success" *ngIf="success">
+          <i class="fas fa-check-circle"></i>
+          {{ success }}
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" (click)="closeModals()">
+            <i class="fas fa-times"></i>
+            İptal
+          </button>
+          <button 
+            type="submit" 
+            class="btn btn-primary"
+            [disabled]="orderForm.invalid || loading"
+          >
+            <span *ngIf="loading" class="spinner"></span>
+            <i *ngIf="!loading" [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-save'"></i>
+            {{ loading ? 'İşleniyor...' : (showCreateModal ? 'Oluştur' : 'Güncelle') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showDeleteModal" (click)="closeModals()">
+  <div class="modal modal-small" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i class="fas fa-exclamation-triangle"></i>
+        Sipariş Sil
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="delete-confirmation">
+        <div class="warning-icon">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="warning-content">
+          <h4>Bu işlem geri alınamaz!</h4>
+          <p>
+            <strong>{{ selectedOrder?.orderNumber }}</strong> numaralı siparişi silmek istediğinizden emin misiniz?
+            Bu işlem sipariş ile ilgili tüm verileri kalıcı olarak silecektir.
+          </p>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div class="alert alert-error" *ngIf="error">
+        <i class="fas fa-exclamation-circle"></i>
+        {{ error }}
+      </div>
+
+      <!-- Success Message -->
+      <div class="alert alert-success" *ngIf="success">
+        <i class="fas fa-check-circle"></i>
+        {{ success }}
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="closeModals()">
+          <i class="fas fa-times"></i>
+          İptal
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-danger"
+          [disabled]="loading"
+          (click)="deleteOrder()"
+        >
+          <span *ngIf="loading" class="spinner"></span>
+          <i *ngIf="!loading" class="fas fa-trash"></i>
+          {{ loading ? 'Siliniyor...' : 'Sil' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Order Details Modal -->
+<div class="modal-overlay" *ngIf="showDetailsModal" (click)="closeModals()">
+  <div class="modal modal-large" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i class="fas fa-receipt"></i>
+        Sipariş Detayları - {{ selectedOrder?.orderNumber }}
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body" *ngIf="selectedOrder">
+      <div class="order-details">
+        <!-- Order Info -->
+        <div class="detail-section">
+          <h4>
+            <i class="fas fa-info-circle"></i>
+            Sipariş Bilgileri
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="label">Sipariş No:</span>
+              <span class="value">{{ selectedOrder.orderNumber }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Tarih:</span>
+              <span class="value">{{ formatDate(selectedOrder.createdAt) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Masa:</span>
+              <span class="value">{{ selectedOrder.tableNumber || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Durum:</span>
+              <span class="value status-badge" [class]="'status-' + selectedOrder.status">
+                {{ getStatusInfo(selectedOrder.status).label }}
+              </span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Ödeme:</span>
+              <span class="value payment-badge" [class]="'payment-' + selectedOrder.paymentStatus">
+                {{ getPaymentStatusInfo(selectedOrder.paymentStatus).label }}
+              </span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Toplam:</span>
+              <span class="value total-amount">{{ formatPrice(selectedOrder.totalAmount) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Customer Info -->
+        <div class="detail-section">
+          <h4>
+            <i class="fas fa-user"></i>
+            Müşteri Bilgileri
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="label">Ad:</span>
+              <span class="value">{{ selectedOrder.customerName || 'Anonim' }}</span>
+            </div>
+            <div class="detail-item" *ngIf="selectedOrder.customerPhone">
+              <span class="label">Telefon:</span>
+              <span class="value">{{ selectedOrder.customerPhone }}</span>
+            </div>
+            <div class="detail-item" *ngIf="selectedOrder.customerEmail">
+              <span class="label">Email:</span>
+              <span class="value">{{ selectedOrder.customerEmail }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Location Info -->
+        <div class="detail-section">
+          <h4>
+            <i class="fas fa-map-marker-alt"></i>
+            Lokasyon Bilgileri
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item" *ngIf="isAdmin">
+              <span class="label">Şirket:</span>
+              <span class="value">{{ getCompanyName(selectedOrder.companyId) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Şube:</span>
+              <span class="value">{{ getBranchName(selectedOrder.branchId) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Order Items -->
+        <div class="detail-section">
+          <h4>
+            <i class="fas fa-list"></i>
+            Sipariş İçeriği
+          </h4>
+          <div class="order-items" *ngIf="selectedOrder.items?.length > 0">
+            <div *ngFor="let item of selectedOrder.items" class="order-item">
+              <div class="item-info">
+                <span class="item-name">{{ item.productId }}</span>
+                <span class="item-notes" *ngIf="item.notes">{{ item.notes }}</span>
+              </div>
+              <div class="item-quantity">{{ item.quantity }}x</div>
+              <div class="item-price">{{ formatPrice(item.price) }}</div>
+              <div class="item-total">{{ formatPrice(item.quantity * item.price) }}</div>
+            </div>
+          </div>
+          <div *ngIf="!selectedOrder.items?.length" class="no-items">
+            <i class="fas fa-utensils"></i>
+            <p>Bu siparişte ürün bulunmuyor.</p>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="detail-section" *ngIf="selectedOrder.notes">
+          <h4>
+            <i class="fas fa-sticky-note"></i>
+            Notlar
+          </h4>
+          <div class="notes-content">
+            {{ selectedOrder.notes }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+        Kapat
+      </button>
+      <button type="button" class="btn btn-primary" (click)="openEditModal(selectedOrder!)">
+        <i class="fas fa-edit"></i>
+        Düzenle
+      </button>
+    </div>
+  </div>
+</div> 

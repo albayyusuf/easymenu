@@ -1,8 +1,187 @@
-<!-- Basit bir navigasyon -->
-<nav style="padding: 1rem; background-color: #f8f9fa;">
-  <a routerLink="/chat" style="text-decoration: none; color: #007bff; padding: 0.5rem 1rem; border-radius: 4px; background-color: #e9ecef;">
-    Chat Sayfasına Git
-  </a>
-</nav>
+<div class="app-container">
+  <!-- Sidebar -->
+  <aside class="sidebar" [class.collapsed]="sidebarCollapsed" [class.mobile-open]="mobileMenuOpen">
+    <!-- Sidebar Header -->
+    <div class="sidebar-header">
+      <div class="logo">
+        <i class="fas fa-utensils logo-icon"></i>
+        <span class="logo-text">EasyMenu</span>
+      </div>
+      <button class="sidebar-toggle" (click)="toggleSidebar()" type="button">
+        <i class="fas" [class.fa-chevron-left]="!sidebarCollapsed" [class.fa-chevron-right]="sidebarCollapsed"></i>
+      </button>
+    </div>
 
-<router-outlet></router-outlet>
+    <!-- User Info -->
+    <div class="user-info" *ngIf="currentUser">
+      <div class="user-avatar">
+        {{ (currentUser.firstName?.charAt(0) || '') + (currentUser.lastName?.charAt(0) || '') || 'U' }}
+      </div>
+      <div class="user-details">
+        <span class="user-name">{{ currentUser.firstName + ' ' + currentUser.lastName || 'Kullanıcı' }}</span>
+        <span class="user-role">{{ getUserRoleText(currentUser.role || '') }}</span>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="sidebar-nav">
+      <ul class="nav-list">
+        <li class="nav-item">
+          <a routerLink="/dashboard" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-tachometer-alt nav-icon"></i>
+            <span class="nav-text">Dashboard</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a routerLink="/orders" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-shopping-cart nav-icon"></i>
+            <span class="nav-text">Siparişler</span>
+            <span class="nav-badge" *ngIf="pendingOrdersCount > 0">{{ pendingOrdersCount }}</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a routerLink="/menus" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-book-open nav-icon"></i>
+            <span class="nav-text">Menüler</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a routerLink="/products" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-box nav-icon"></i>
+            <span class="nav-text">Ürünler</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a routerLink="/categories" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-tags nav-icon"></i>
+            <span class="nav-text">Kategoriler</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a routerLink="/branches" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-store nav-icon"></i>
+            <span class="nav-text">Şubeler</span>
+          </a>
+        </li>
+        
+        <li class="nav-item" *ngIf="isAdmin">
+          <a routerLink="/companies" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-building nav-icon"></i>
+            <span class="nav-text">Şirketler</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a routerLink="/qr-codes" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-qrcode nav-icon"></i>
+            <span class="nav-text">QR Kodlar</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a routerLink="/reports" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-chart-bar nav-icon"></i>
+            <span class="nav-text">Raporlar</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a routerLink="/chat" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-robot nav-icon"></i>
+            <span class="nav-text">AI Chat</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a routerLink="/settings" routerLinkActive="active" class="nav-link" (click)="closeMobileMenu()">
+            <i class="fas fa-cog nav-icon"></i>
+            <span class="nav-text">Ayarlar</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <button class="nav-link logout-btn" (click)="logout()">
+            <i class="fas fa-sign-out-alt nav-icon"></i>
+            <span class="nav-text">Çıkış Yap</span>
+          </button>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- Sidebar Footer -->
+    <div class="sidebar-footer">
+      <div class="version-info">
+        v1.0.0
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile Overlay -->
+  <div class="mobile-overlay" *ngIf="mobileMenuOpen" (click)="closeMobileMenu()"></div>
+
+  <!-- Main Content -->
+  <main class="main-content" [class.expanded]="sidebarCollapsed">
+    <!-- Top Header -->
+    <header class="top-header">
+      <div class="header-left">
+        <button class="mobile-menu-btn" (click)="toggleMobileMenu()" type="button">
+          <i class="fas fa-bars"></i>
+        </button>
+        <h1 class="page-title">{{ getPageTitle() }}</h1>
+      </div>
+      
+      <div class="header-right">
+        <!-- Notifications -->
+        <div class="notification-dropdown">
+          <button class="notification-btn" (click)="toggleNotifications()" type="button">
+            <i class="fas fa-bell"></i>
+            <span class="notification-count" *ngIf="notificationCount > 0">{{ notificationCount }}</span>
+          </button>
+          
+          <div class="user-dropdown" *ngIf="showNotifications">
+            <div class="dropdown-item">
+              <i class="fas fa-info-circle"></i>
+              <span>Henüz bildirim yok</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- User Menu -->
+        <div class="user-menu" *ngIf="currentUser">
+          <button class="user-menu-btn" (click)="toggleUserMenu()" type="button">
+            <div class="user-avatar-small">
+              {{ (currentUser.firstName?.charAt(0) || '') + (currentUser.lastName?.charAt(0) || '') || 'U' }}
+            </div>
+            <span class="user-name-small">{{ currentUser.firstName + ' ' + currentUser.lastName || 'Kullanıcı' }}</span>
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          
+          <div class="user-dropdown" *ngIf="showUserMenu">
+            <a routerLink="/profile" class="dropdown-item" (click)="closeAllDropdowns()">
+              <i class="fas fa-user"></i>
+              <span>Profil</span>
+            </a>
+            <a routerLink="/settings" class="dropdown-item" (click)="closeAllDropdowns()">
+              <i class="fas fa-cog"></i>
+              <span>Ayarlar</span>
+            </a>
+            <button class="dropdown-item logout" (click)="logout()">
+              <i class="fas fa-sign-out-alt"></i>
+              <span>Çıkış Yap</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="page-content">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+</div>

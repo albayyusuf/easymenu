@@ -1,0 +1,445 @@
+<div class="categories-container">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-content">
+      <div class="header-info">
+        <h1>
+          <i class="fas fa-tags"></i>
+          Kategori Yönetimi
+        </h1>
+        <p>Ürün kategorilerini görüntüleyin ve yönetin</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" (click)="openCreateModal()">
+          <i class="fas fa-plus"></i>
+          Yeni Kategori
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="search-section">
+    <form [formGroup]="searchForm" class="search-form">
+      <div class="search-group">
+        <div class="search-input">
+          <i class="fas fa-search"></i>
+          <input
+            type="text"
+            formControlName="search"
+            placeholder="Kategori adı veya açıklama ile ara..."
+          />
+        </div>
+        <div class="filter-select" *ngIf="isAdmin">
+          <select formControlName="companyId">
+            <option value="">Tüm Şirketler</option>
+            <option *ngFor="let company of companies" [value]="company.id">
+              {{ company.name }}
+            </option>
+          </select>
+        </div>
+        <div class="filter-select">
+          <select formControlName="status">
+            <option value="all">Tüm Durumlar</option>
+            <option value="active">Aktif</option>
+            <option value="inactive">Pasif</option>
+          </select>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="loading">
+    <div class="spinner"></div>
+    <p>Kategoriler yükleniyor...</p>
+  </div>
+
+  <!-- Error Message -->
+  <div class="alert alert-error" *ngIf="error && !loading">
+    <i class="fas fa-exclamation-circle"></i>
+    {{ error }}
+    <button class="btn-retry" (click)="loadCategories()">
+      <i class="fas fa-redo"></i>
+      Tekrar Dene
+    </button>
+  </div>
+
+  <!-- Success Message -->
+  <div class="alert alert-success" *ngIf="success">
+    <i class="fas fa-check-circle"></i>
+    {{ success }}
+  </div>
+
+  <!-- Categories Grid -->
+  <div class="categories-content" *ngIf="!loading && !error">
+    <div class="categories-header">
+      <h3>
+        <i class="fas fa-grid-3x3"></i>
+        Kategoriler ({{ filteredCategories.length }})
+      </h3>
+    </div>
+
+    <!-- Categories Grid -->
+    <div class="categories-grid" *ngIf="paginatedCategories.length > 0">
+      <div 
+        *ngFor="let category of paginatedCategories" 
+        class="category-card"
+        [class.inactive]="!category.isActive"
+      >
+        <!-- Category Image -->
+        <div class="category-image">
+          <img 
+            *ngIf="category.image" 
+            [src]="category.image" 
+            [alt]="category.name"
+            (error)="onImageError($event)"
+          />
+          <div *ngIf="!category.image" class="image-placeholder">
+            <i class="fas fa-image"></i>
+          </div>
+          
+          <!-- Status Badge -->
+          <div class="status-badge" [class]="getStatusBadgeClass(category.isActive)">
+            <i [class]="category.isActive ? 'fas fa-check' : 'fas fa-times'"></i>
+            {{ getStatusText(category.isActive) }}
+          </div>
+        </div>
+
+        <!-- Category Content -->
+        <div class="category-content">
+          <div class="category-header">
+            <h4>{{ category.name }}</h4>
+            <div class="sort-order">
+              <i class="fas fa-sort-numeric-up"></i>
+              {{ category.sortOrder }}
+            </div>
+          </div>
+
+          <p class="category-description" *ngIf="category.description">
+            {{ category.description }}
+          </p>
+
+          <!-- Company Info (for admin) -->
+          <div class="company-info" *ngIf="isAdmin">
+            <div class="company-badge">
+              <i class="fas fa-building"></i>
+              <span>{{ getCompanyName(category.companyId) }}</span>
+            </div>
+          </div>
+
+          <!-- Category Meta -->
+          <div class="category-meta">
+            <div class="meta-item">
+              <i class="fas fa-calendar"></i>
+              <span>{{ category.createdAt | date:'dd/MM/yyyy' }}</span>
+            </div>
+            <div class="meta-item">
+              <i class="fas fa-clock"></i>
+              <span>{{ category.updatedAt | date:'HH:mm' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Actions -->
+        <div class="category-actions">
+          <button 
+            class="btn-action btn-edit" 
+            (click)="openEditModal(category)"
+            title="Düzenle"
+          >
+            <i class="fas fa-edit"></i>
+          </button>
+          <button 
+            class="btn-action btn-delete" 
+            (click)="openDeleteModal(category)"
+            title="Sil"
+            *ngIf="isAdmin || currentUser?.companyId === category.companyId"
+          >
+            <i class="fas fa-trash"></i>
+          </button>
+          <a 
+            [routerLink]="['/products']" 
+            [queryParams]="{categoryId: category.id}"
+            class="btn-action btn-products"
+            title="Ürünler"
+          >
+            <i class="fas fa-utensils"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="filteredCategories.length === 0">
+      <i class="fas fa-tags"></i>
+      <h3>Kategori Bulunamadı</h3>
+      <p>Arama kriterlerinize uygun kategori bulunamadı.</p>
+      <button class="btn btn-primary" (click)="openCreateModal()">
+        <i class="fas fa-plus"></i>
+        İlk Kategoriyi Oluştur
+      </button>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="totalPages > 1">
+      <div class="pagination-info">
+        <span>
+          {{ (currentPage - 1) * itemsPerPage + 1 }} - 
+          {{ Math.min(currentPage * itemsPerPage, filteredCategories.length) }} 
+          / {{ filteredCategories.length }} kategori
+        </span>
+      </div>
+      <div class="pagination">
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === 1"
+          (click)="goToPage(currentPage - 1)"
+        >
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        
+        <button 
+          *ngFor="let page of pages" 
+          class="btn-page"
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === totalPages"
+          (click)="goToPage(currentPage + 1)"
+        >
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal-overlay" *ngIf="showCreateModal || showEditModal" (click)="closeModals()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-edit'"></i>
+        {{ showCreateModal ? 'Yeni Kategori Oluştur' : 'Kategori Düzenle' }}
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <form [formGroup]="categoryForm" (ngSubmit)="showCreateModal ? createCategory() : updateCategory()">
+        <!-- Company Selection (for admin) -->
+        <div class="form-group" *ngIf="isAdmin">
+          <label for="companyId">
+            <i class="fas fa-building"></i>
+            Şirket *
+          </label>
+          <select
+            id="companyId"
+            formControlName="companyId"
+            [class.error]="companyId?.invalid && companyId?.touched"
+          >
+            <option value="">Şirket seçin</option>
+            <option *ngFor="let company of companies" [value]="company.id">
+              {{ company.name }}
+            </option>
+          </select>
+          <div class="error-message" *ngIf="companyId?.invalid && companyId?.touched">
+            <span *ngIf="companyId?.errors?.['required']">Şirket seçimi gereklidir</span>
+          </div>
+        </div>
+
+        <!-- Category Name -->
+        <div class="form-group">
+          <label for="name">
+            <i class="fas fa-tag"></i>
+            Kategori Adı *
+          </label>
+          <input
+            type="text"
+            id="name"
+            formControlName="name"
+            placeholder="Kategori adını girin"
+            [class.error]="name?.invalid && name?.touched"
+          />
+          <div class="error-message" *ngIf="name?.invalid && name?.touched">
+            <span *ngIf="name?.errors?.['required']">Kategori adı gereklidir</span>
+            <span *ngIf="name?.errors?.['minlength']">Kategori adı en az 2 karakter olmalıdır</span>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+          <label for="description">
+            <i class="fas fa-align-left"></i>
+            Açıklama
+          </label>
+          <textarea
+            id="description"
+            formControlName="description"
+            placeholder="Kategori açıklamasını girin"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <!-- Image Upload -->
+        <div class="form-group">
+          <label for="image">
+            <i class="fas fa-image"></i>
+            Kategori Görseli
+          </label>
+          <div class="image-upload">
+            <input
+              type="file"
+              id="image"
+              accept="image/*"
+              (change)="onImageChange($event)"
+              #imageInput
+            />
+            <div class="image-preview" *ngIf="image?.value">
+              <img [src]="image?.value" alt="Kategori görseli" />
+              <button 
+                type="button" 
+                class="btn-remove-image"
+                (click)="categoryForm.patchValue({image: ''}); imageInput.value = ''"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="upload-placeholder" *ngIf="!image?.value">
+              <i class="fas fa-cloud-upload-alt"></i>
+              <span>Görsel yüklemek için tıklayın</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sort Order -->
+        <div class="form-group">
+          <label for="sortOrder">
+            <i class="fas fa-sort-numeric-up"></i>
+            Sıralama
+          </label>
+          <input
+            type="number"
+            id="sortOrder"
+            formControlName="sortOrder"
+            placeholder="0"
+            min="0"
+            [class.error]="sortOrder?.invalid && sortOrder?.touched"
+          />
+          <div class="error-message" *ngIf="sortOrder?.invalid && sortOrder?.touched">
+            <span *ngIf="sortOrder?.errors?.['min']">Sıralama 0'dan küçük olamaz</span>
+          </div>
+        </div>
+
+        <!-- Status -->
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              formControlName="isActive"
+            />
+            <span class="checkmark"></span>
+            Kategori aktif
+          </label>
+        </div>
+
+        <!-- Error Message -->
+        <div class="alert alert-error" *ngIf="error">
+          <i class="fas fa-exclamation-circle"></i>
+          {{ error }}
+        </div>
+
+        <!-- Success Message -->
+        <div class="alert alert-success" *ngIf="success">
+          <i class="fas fa-check-circle"></i>
+          {{ success }}
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" (click)="closeModals()">
+            <i class="fas fa-times"></i>
+            İptal
+          </button>
+          <button 
+            type="submit" 
+            class="btn btn-primary"
+            [disabled]="categoryForm.invalid || loading"
+          >
+            <span *ngIf="loading" class="spinner"></span>
+            <i *ngIf="!loading" [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-save'"></i>
+            {{ loading ? 'İşleniyor...' : (showCreateModal ? 'Oluştur' : 'Güncelle') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showDeleteModal" (click)="closeModals()">
+  <div class="modal modal-small" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i class="fas fa-exclamation-triangle"></i>
+        Kategori Sil
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="delete-confirmation">
+        <div class="warning-icon">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="warning-content">
+          <h4>Bu işlem geri alınamaz!</h4>
+          <p>
+            <strong>{{ selectedCategory?.name }}</strong> kategorisini silmek istediğinizden emin misiniz?
+            Bu işlem kategoriyle ilgili tüm verileri kalıcı olarak silecektir.
+          </p>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div class="alert alert-error" *ngIf="error">
+        <i class="fas fa-exclamation-circle"></i>
+        {{ error }}
+      </div>
+
+      <!-- Success Message -->
+      <div class="alert alert-success" *ngIf="success">
+        <i class="fas fa-check-circle"></i>
+        {{ success }}
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="closeModals()">
+          <i class="fas fa-times"></i>
+          İptal
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-danger"
+          [disabled]="loading"
+          (click)="deleteCategory()"
+        >
+          <span *ngIf="loading" class="spinner"></span>
+          <i *ngIf="!loading" class="fas fa-trash"></i>
+          {{ loading ? 'Siliniyor...' : 'Sil' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div> 

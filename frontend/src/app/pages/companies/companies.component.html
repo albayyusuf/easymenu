@@ -1,0 +1,432 @@
+<div class="companies-container">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-content">
+      <div class="header-info">
+        <h1>
+          <i class="fas fa-building"></i>
+          Şirket Yönetimi
+        </h1>
+        <p>Sistemdeki şirketleri görüntüleyin ve yönetin</p>
+      </div>
+      <div class="header-actions" *ngIf="isAdmin">
+        <button class="btn btn-primary" (click)="openCreateModal()">
+          <i class="fas fa-plus"></i>
+          Yeni Şirket
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="search-section">
+    <form [formGroup]="searchForm" class="search-form">
+      <div class="search-group">
+        <div class="search-input">
+          <i class="fas fa-search"></i>
+          <input
+            type="text"
+            formControlName="search"
+            placeholder="Şirket adı, email veya slug ile ara..."
+          />
+        </div>
+        <div class="filter-select">
+          <select formControlName="status">
+            <option value="all">Tüm Durumlar</option>
+            <option value="active">Aktif</option>
+            <option value="inactive">Pasif</option>
+          </select>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="loading">
+    <div class="spinner"></div>
+    <p>Şirketler yükleniyor...</p>
+  </div>
+
+  <!-- Error Message -->
+  <div class="alert alert-error" *ngIf="error && !loading">
+    <i class="fas fa-exclamation-circle"></i>
+    {{ error }}
+    <button class="btn-retry" (click)="loadCompanies()">
+      <i class="fas fa-redo"></i>
+      Tekrar Dene
+    </button>
+  </div>
+
+  <!-- Success Message -->
+  <div class="alert alert-success" *ngIf="success">
+    <i class="fas fa-check-circle"></i>
+    {{ success }}
+  </div>
+
+  <!-- Companies Table -->
+  <div class="table-container" *ngIf="!loading && !error">
+    <div class="table-header">
+      <h3>
+        <i class="fas fa-list"></i>
+        Şirketler ({{ filteredCompanies.length }})
+      </h3>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="companies-table">
+        <thead>
+          <tr>
+            <th>Şirket</th>
+            <th>İletişim</th>
+            <th>URL</th>
+            <th>Durum</th>
+            <th>Oluşturulma</th>
+            <th class="actions-column">İşlemler</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let company of paginatedCompanies" class="company-row">
+            <td class="company-info">
+              <div class="company-details">
+                <h4>{{ company.name }}</h4>
+                <p *ngIf="company.description">{{ company.description }}</p>
+              </div>
+            </td>
+            <td class="contact-info">
+              <div class="contact-details">
+                <div class="contact-item" *ngIf="company.email">
+                  <i class="fas fa-envelope"></i>
+                  <a [href]="'mailto:' + company.email">{{ company.email }}</a>
+                </div>
+                <div class="contact-item" *ngIf="company.phone">
+                  <i class="fas fa-phone"></i>
+                  <span>{{ company.phone }}</span>
+                </div>
+                <div class="contact-item" *ngIf="company.address">
+                  <i class="fas fa-map-marker-alt"></i>
+                  <span>{{ company.address }}</span>
+                </div>
+              </div>
+            </td>
+            <td class="url-info">
+              <div class="url-badge">
+                <i class="fas fa-link"></i>
+                <span>{{ company.slug }}</span>
+              </div>
+            </td>
+            <td class="status-info">
+              <span class="badge" [class]="getStatusBadgeClass(company.isActive)">
+                <i [class]="company.isActive ? 'fas fa-check' : 'fas fa-times'"></i>
+                {{ getStatusText(company.isActive) }}
+              </span>
+            </td>
+            <td class="date-info">
+              <span>{{ company.createdAt | date:'dd/MM/yyyy' }}</span>
+              <small>{{ company.createdAt | date:'HH:mm' }}</small>
+            </td>
+            <td class="actions">
+              <div class="action-buttons">
+                <button 
+                  class="btn-action btn-edit" 
+                  (click)="openEditModal(company)"
+                  title="Düzenle"
+                  *ngIf="isAdmin || currentUser?.companyId === company.id"
+                >
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button 
+                  class="btn-action btn-delete" 
+                  (click)="openDeleteModal(company)"
+                  title="Sil"
+                  *ngIf="isAdmin"
+                >
+                  <i class="fas fa-trash"></i>
+                </button>
+                <a 
+                  [routerLink]="['/branches']" 
+                  [queryParams]="{companyId: company.id}"
+                  class="btn-action btn-branches"
+                  title="Şubeler"
+                >
+                  <i class="fas fa-store"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="filteredCompanies.length === 0">
+        <i class="fas fa-building"></i>
+        <h3>Şirket Bulunamadı</h3>
+        <p>Arama kriterlerinize uygun şirket bulunamadı.</p>
+        <button class="btn btn-primary" (click)="openCreateModal()" *ngIf="isAdmin">
+          <i class="fas fa-plus"></i>
+          İlk Şirketi Oluştur
+        </button>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="totalPages > 1">
+      <div class="pagination-info">
+        <span>
+          {{ (currentPage - 1) * itemsPerPage + 1 }} - 
+          {{ Math.min(currentPage * itemsPerPage, filteredCompanies.length) }} 
+          / {{ filteredCompanies.length }} şirket
+        </span>
+      </div>
+      <div class="pagination">
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === 1"
+          (click)="goToPage(currentPage - 1)"
+        >
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        
+        <button 
+          *ngFor="let page of pages" 
+          class="btn-page"
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === totalPages"
+          (click)="goToPage(currentPage + 1)"
+        >
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal-overlay" *ngIf="showCreateModal || showEditModal" (click)="closeModals()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-edit'"></i>
+        {{ showCreateModal ? 'Yeni Şirket Oluştur' : 'Şirket Düzenle' }}
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <form [formGroup]="companyForm" (ngSubmit)="showCreateModal ? createCompany() : updateCompany()">
+        <!-- Company Name -->
+        <div class="form-group">
+          <label for="name">
+            <i class="fas fa-building"></i>
+            Şirket Adı *
+          </label>
+          <input
+            type="text"
+            id="name"
+            formControlName="name"
+            placeholder="Şirket adını girin"
+            [class.error]="name?.invalid && name?.touched"
+          />
+          <div class="error-message" *ngIf="name?.invalid && name?.touched">
+            <span *ngIf="name?.errors?.['required']">Şirket adı gereklidir</span>
+            <span *ngIf="name?.errors?.['minlength']">Şirket adı en az 2 karakter olmalıdır</span>
+          </div>
+        </div>
+
+        <!-- Company Slug -->
+        <div class="form-group">
+          <label for="slug">
+            <i class="fas fa-link"></i>
+            URL Adresi *
+          </label>
+          <div class="slug-input">
+            <span class="slug-prefix">easymenu.com/</span>
+            <input
+              type="text"
+              id="slug"
+              formControlName="slug"
+              placeholder="sirket-adi"
+              [class.error]="slug?.invalid && slug?.touched"
+              (blur)="checkSlugAvailability()"
+            />
+          </div>
+          <div class="error-message" *ngIf="slug?.invalid && slug?.touched">
+            <span *ngIf="slug?.errors?.['required']">URL adresi gereklidir</span>
+            <span *ngIf="slug?.errors?.['pattern']">Sadece küçük harf, rakam ve tire kullanın</span>
+            <span *ngIf="slug?.errors?.['unavailable']">Bu URL adresi kullanılıyor</span>
+          </div>
+        </div>
+
+        <!-- Email -->
+        <div class="form-group">
+          <label for="email">
+            <i class="fas fa-envelope"></i>
+            Email *
+          </label>
+          <input
+            type="email"
+            id="email"
+            formControlName="email"
+            placeholder="info@sirket.com"
+            [class.error]="email?.invalid && email?.touched"
+          />
+          <div class="error-message" *ngIf="email?.invalid && email?.touched">
+            <span *ngIf="email?.errors?.['required']">Email adresi gereklidir</span>
+            <span *ngIf="email?.errors?.['email']">Geçerli bir email adresi girin</span>
+          </div>
+        </div>
+
+        <!-- Phone -->
+        <div class="form-group">
+          <label for="phone">
+            <i class="fas fa-phone"></i>
+            Telefon
+          </label>
+          <input
+            type="tel"
+            id="phone"
+            formControlName="phone"
+            placeholder="+90 (555) 123 45 67"
+          />
+        </div>
+
+        <!-- Address -->
+        <div class="form-group">
+          <label for="address">
+            <i class="fas fa-map-marker-alt"></i>
+            Adres
+          </label>
+          <textarea
+            id="address"
+            formControlName="address"
+            placeholder="Şirket adresini girin"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+          <label for="description">
+            <i class="fas fa-info-circle"></i>
+            Açıklama
+          </label>
+          <textarea
+            id="description"
+            formControlName="description"
+            placeholder="Şirket hakkında kısa bilgi"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <!-- Status -->
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              formControlName="isActive"
+            />
+            <span class="checkmark"></span>
+            Şirket aktif
+          </label>
+        </div>
+
+        <!-- Error Message -->
+        <div class="alert alert-error" *ngIf="error">
+          <i class="fas fa-exclamation-circle"></i>
+          {{ error }}
+        </div>
+
+        <!-- Success Message -->
+        <div class="alert alert-success" *ngIf="success">
+          <i class="fas fa-check-circle"></i>
+          {{ success }}
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" (click)="closeModals()">
+            <i class="fas fa-times"></i>
+            İptal
+          </button>
+          <button 
+            type="submit" 
+            class="btn btn-primary"
+            [disabled]="companyForm.invalid || loading"
+          >
+            <span *ngIf="loading" class="spinner"></span>
+            <i *ngIf="!loading" [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-save'"></i>
+            {{ loading ? 'İşleniyor...' : (showCreateModal ? 'Oluştur' : 'Güncelle') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showDeleteModal" (click)="closeModals()">
+  <div class="modal modal-small" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i class="fas fa-exclamation-triangle"></i>
+        Şirket Sil
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="delete-confirmation">
+        <div class="warning-icon">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="warning-content">
+          <h4>Bu işlem geri alınamaz!</h4>
+          <p>
+            <strong>{{ selectedCompany?.name }}</strong> şirketini silmek istediğinizden emin misiniz?
+            Bu işlem şirketle ilgili tüm verileri kalıcı olarak silecektir.
+          </p>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div class="alert alert-error" *ngIf="error">
+        <i class="fas fa-exclamation-circle"></i>
+        {{ error }}
+      </div>
+
+      <!-- Success Message -->
+      <div class="alert alert-success" *ngIf="success">
+        <i class="fas fa-check-circle"></i>
+        {{ success }}
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="closeModals()">
+          <i class="fas fa-times"></i>
+          İptal
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-danger"
+          [disabled]="loading"
+          (click)="deleteCompany()"
+        >
+          <span *ngIf="loading" class="spinner"></span>
+          <i *ngIf="!loading" class="fas fa-trash"></i>
+          {{ loading ? 'Siliniyor...' : 'Sil' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div> 

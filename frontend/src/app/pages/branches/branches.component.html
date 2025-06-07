@@ -1,0 +1,432 @@
+<div class="branches-container">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-content">
+      <div class="header-info">
+        <h1>
+          <i class="fas fa-store"></i>
+          Şube Yönetimi
+        </h1>
+        <p>Şirket şubelerini görüntüleyin ve yönetin</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" (click)="openCreateModal()">
+          <i class="fas fa-plus"></i>
+          Yeni Şube
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="search-section">
+    <form [formGroup]="searchForm" class="search-form">
+      <div class="search-group">
+        <div class="search-input">
+          <i class="fas fa-search"></i>
+          <input
+            type="text"
+            formControlName="search"
+            placeholder="Şube adı, adres, telefon veya email ile ara..."
+          />
+        </div>
+        <div class="filter-select" *ngIf="isAdmin">
+          <select formControlName="companyId">
+            <option value="">Tüm Şirketler</option>
+            <option *ngFor="let company of companies" [value]="company.id">
+              {{ company.name }}
+            </option>
+          </select>
+        </div>
+        <div class="filter-select">
+          <select formControlName="status">
+            <option value="all">Tüm Durumlar</option>
+            <option value="active">Aktif</option>
+            <option value="inactive">Pasif</option>
+          </select>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="loading">
+    <div class="spinner"></div>
+    <p>Şubeler yükleniyor...</p>
+  </div>
+
+  <!-- Error Message -->
+  <div class="alert alert-error" *ngIf="error && !loading">
+    <i class="fas fa-exclamation-circle"></i>
+    {{ error }}
+    <button class="btn-retry" (click)="loadBranches()">
+      <i class="fas fa-redo"></i>
+      Tekrar Dene
+    </button>
+  </div>
+
+  <!-- Success Message -->
+  <div class="alert alert-success" *ngIf="success">
+    <i class="fas fa-check-circle"></i>
+    {{ success }}
+  </div>
+
+  <!-- Branches Table -->
+  <div class="table-container" *ngIf="!loading && !error">
+    <div class="table-header">
+      <h3>
+        <i class="fas fa-list"></i>
+        Şubeler ({{ filteredBranches.length }})
+      </h3>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="branches-table">
+        <thead>
+          <tr>
+            <th>Şube</th>
+            <th>İletişim</th>
+            <th *ngIf="isAdmin">Şirket</th>
+            <th>Durum</th>
+            <th>Oluşturulma</th>
+            <th class="actions-column">İşlemler</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let branch of paginatedBranches" class="branch-row">
+            <td class="branch-info">
+              <div class="branch-details">
+                <h4>{{ branch.name }}</h4>
+                <p class="address">
+                  <i class="fas fa-map-marker-alt"></i>
+                  {{ branch.address }}
+                </p>
+              </div>
+            </td>
+            <td class="contact-info">
+              <div class="contact-details">
+                <div class="contact-item" *ngIf="branch.phone">
+                  <i class="fas fa-phone"></i>
+                  <span>{{ branch.phone }}</span>
+                </div>
+                <div class="contact-item" *ngIf="branch.email">
+                  <i class="fas fa-envelope"></i>
+                  <a [href]="'mailto:' + branch.email">{{ branch.email }}</a>
+                </div>
+              </div>
+            </td>
+            <td class="company-info" *ngIf="isAdmin">
+              <div class="company-badge">
+                <i class="fas fa-building"></i>
+                <span>{{ getCompanyName(branch.companyId) }}</span>
+              </div>
+            </td>
+            <td class="status-info">
+              <span class="badge" [class]="getStatusBadgeClass(branch.isActive)">
+                <i [class]="branch.isActive ? 'fas fa-check' : 'fas fa-times'"></i>
+                {{ getStatusText(branch.isActive) }}
+              </span>
+            </td>
+            <td class="date-info">
+              <span>{{ branch.createdAt | date:'dd/MM/yyyy' }}</span>
+              <small>{{ branch.createdAt | date:'HH:mm' }}</small>
+            </td>
+            <td class="actions">
+              <div class="action-buttons">
+                <button 
+                  class="btn-action btn-edit" 
+                  (click)="openEditModal(branch)"
+                  title="Düzenle"
+                >
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button 
+                  class="btn-action btn-delete" 
+                  (click)="openDeleteModal(branch)"
+                  title="Sil"
+                  *ngIf="isAdmin || currentUser?.companyId === branch.companyId"
+                >
+                  <i class="fas fa-trash"></i>
+                </button>
+                <a 
+                  [routerLink]="['/categories']" 
+                  [queryParams]="{branchId: branch.id}"
+                  class="btn-action btn-categories"
+                  title="Kategoriler"
+                >
+                  <i class="fas fa-tags"></i>
+                </a>
+                <a 
+                  [routerLink]="['/products']" 
+                  [queryParams]="{branchId: branch.id}"
+                  class="btn-action btn-products"
+                  title="Ürünler"
+                >
+                  <i class="fas fa-utensils"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="filteredBranches.length === 0">
+        <i class="fas fa-store"></i>
+        <h3>Şube Bulunamadı</h3>
+        <p>Arama kriterlerinize uygun şube bulunamadı.</p>
+        <button class="btn btn-primary" (click)="openCreateModal()">
+          <i class="fas fa-plus"></i>
+          İlk Şubeyi Oluştur
+        </button>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="totalPages > 1">
+      <div class="pagination-info">
+        <span>
+          {{ (currentPage - 1) * itemsPerPage + 1 }} - 
+          {{ Math.min(currentPage * itemsPerPage, filteredBranches.length) }} 
+          / {{ filteredBranches.length }} şube
+        </span>
+      </div>
+      <div class="pagination">
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === 1"
+          (click)="goToPage(currentPage - 1)"
+        >
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        
+        <button 
+          *ngFor="let page of pages" 
+          class="btn-page"
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === totalPages"
+          (click)="goToPage(currentPage + 1)"
+        >
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal-overlay" *ngIf="showCreateModal || showEditModal" (click)="closeModals()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-edit'"></i>
+        {{ showCreateModal ? 'Yeni Şube Oluştur' : 'Şube Düzenle' }}
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <form [formGroup]="branchForm" (ngSubmit)="showCreateModal ? createBranch() : updateBranch()">
+        <!-- Company Selection (for admin) -->
+        <div class="form-group" *ngIf="isAdmin">
+          <label for="companyId">
+            <i class="fas fa-building"></i>
+            Şirket *
+          </label>
+          <select
+            id="companyId"
+            formControlName="companyId"
+            [class.error]="companyId?.invalid && companyId?.touched"
+          >
+            <option value="">Şirket seçin</option>
+            <option *ngFor="let company of companies" [value]="company.id">
+              {{ company.name }}
+            </option>
+          </select>
+          <div class="error-message" *ngIf="companyId?.invalid && companyId?.touched">
+            <span *ngIf="companyId?.errors?.['required']">Şirket seçimi gereklidir</span>
+          </div>
+        </div>
+
+        <!-- Branch Name -->
+        <div class="form-group">
+          <label for="name">
+            <i class="fas fa-store"></i>
+            Şube Adı *
+          </label>
+          <input
+            type="text"
+            id="name"
+            formControlName="name"
+            placeholder="Şube adını girin"
+            [class.error]="name?.invalid && name?.touched"
+          />
+          <div class="error-message" *ngIf="name?.invalid && name?.touched">
+            <span *ngIf="name?.errors?.['required']">Şube adı gereklidir</span>
+            <span *ngIf="name?.errors?.['minlength']">Şube adı en az 2 karakter olmalıdır</span>
+          </div>
+        </div>
+
+        <!-- Address -->
+        <div class="form-group">
+          <label for="address">
+            <i class="fas fa-map-marker-alt"></i>
+            Adres *
+          </label>
+          <textarea
+            id="address"
+            formControlName="address"
+            placeholder="Şube adresini girin"
+            rows="3"
+            [class.error]="address?.invalid && address?.touched"
+          ></textarea>
+          <div class="error-message" *ngIf="address?.invalid && address?.touched">
+            <span *ngIf="address?.errors?.['required']">Adres gereklidir</span>
+          </div>
+        </div>
+
+        <!-- Phone -->
+        <div class="form-group">
+          <label for="phone">
+            <i class="fas fa-phone"></i>
+            Telefon
+          </label>
+          <input
+            type="tel"
+            id="phone"
+            formControlName="phone"
+            placeholder="+90 (555) 123 45 67"
+          />
+        </div>
+
+        <!-- Email -->
+        <div class="form-group">
+          <label for="email">
+            <i class="fas fa-envelope"></i>
+            Email
+          </label>
+          <input
+            type="email"
+            id="email"
+            formControlName="email"
+            placeholder="sube@sirket.com"
+            [class.error]="email?.invalid && email?.touched"
+          />
+          <div class="error-message" *ngIf="email?.invalid && email?.touched">
+            <span *ngIf="email?.errors?.['email']">Geçerli bir email adresi girin</span>
+          </div>
+        </div>
+
+        <!-- Status -->
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              formControlName="isActive"
+            />
+            <span class="checkmark"></span>
+            Şube aktif
+          </label>
+        </div>
+
+        <!-- Error Message -->
+        <div class="alert alert-error" *ngIf="error">
+          <i class="fas fa-exclamation-circle"></i>
+          {{ error }}
+        </div>
+
+        <!-- Success Message -->
+        <div class="alert alert-success" *ngIf="success">
+          <i class="fas fa-check-circle"></i>
+          {{ success }}
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" (click)="closeModals()">
+            <i class="fas fa-times"></i>
+            İptal
+          </button>
+          <button 
+            type="submit" 
+            class="btn btn-primary"
+            [disabled]="branchForm.invalid || loading"
+          >
+            <span *ngIf="loading" class="spinner"></span>
+            <i *ngIf="!loading" [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-save'"></i>
+            {{ loading ? 'İşleniyor...' : (showCreateModal ? 'Oluştur' : 'Güncelle') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showDeleteModal" (click)="closeModals()">
+  <div class="modal modal-small" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i class="fas fa-exclamation-triangle"></i>
+        Şube Sil
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="delete-confirmation">
+        <div class="warning-icon">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="warning-content">
+          <h4>Bu işlem geri alınamaz!</h4>
+          <p>
+            <strong>{{ selectedBranch?.name }}</strong> şubesini silmek istediğinizden emin misiniz?
+            Bu işlem şubeyle ilgili tüm verileri kalıcı olarak silecektir.
+          </p>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div class="alert alert-error" *ngIf="error">
+        <i class="fas fa-exclamation-circle"></i>
+        {{ error }}
+      </div>
+
+      <!-- Success Message -->
+      <div class="alert alert-success" *ngIf="success">
+        <i class="fas fa-check-circle"></i>
+        {{ success }}
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="closeModals()">
+          <i class="fas fa-times"></i>
+          İptal
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-danger"
+          [disabled]="loading"
+          (click)="deleteBranch()"
+        >
+          <span *ngIf="loading" class="spinner"></span>
+          <i *ngIf="!loading" class="fas fa-trash"></i>
+          {{ loading ? 'Siliniyor...' : 'Sil' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div> 

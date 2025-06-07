@@ -1,0 +1,576 @@
+<div class="products-container">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-content">
+      <div class="header-info">
+        <h1>
+          <i class="fas fa-utensils"></i>
+          Ürün Yönetimi
+        </h1>
+        <p>Menü ürünlerini görüntüleyin ve yönetin</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" (click)="openCreateModal()">
+          <i class="fas fa-plus"></i>
+          Yeni Ürün
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="search-section">
+    <form [formGroup]="searchForm" class="search-form">
+      <div class="search-group">
+        <div class="search-input">
+          <i class="fas fa-search"></i>
+          <input
+            type="text"
+            formControlName="search"
+            placeholder="Ürün adı veya açıklama ile ara..."
+          />
+        </div>
+        <div class="filter-select" *ngIf="isAdmin">
+          <select formControlName="companyId" (change)="loadCategories()">
+            <option value="">Tüm Şirketler</option>
+            <option *ngFor="let company of companies" [value]="company.id">
+              {{ company.name }}
+            </option>
+          </select>
+        </div>
+        <div class="filter-select">
+          <select formControlName="categoryId">
+            <option value="">Tüm Kategoriler</option>
+            <option *ngFor="let category of categories" [value]="category.id">
+              {{ category.name }}
+            </option>
+          </select>
+        </div>
+        <div class="filter-select">
+          <select formControlName="status">
+            <option value="all">Tüm Durumlar</option>
+            <option value="available">Mevcut</option>
+            <option value="unavailable">Mevcut Değil</option>
+          </select>
+        </div>
+        <div class="price-filters">
+          <input
+            type="number"
+            formControlName="priceMin"
+            placeholder="Min Fiyat"
+            min="0"
+            step="0.01"
+          />
+          <input
+            type="number"
+            formControlName="priceMax"
+            placeholder="Max Fiyat"
+            min="0"
+            step="0.01"
+          />
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="loading">
+    <div class="spinner"></div>
+    <p>Ürünler yükleniyor...</p>
+  </div>
+
+  <!-- Error Message -->
+  <div class="alert alert-error" *ngIf="error && !loading">
+    <i class="fas fa-exclamation-circle"></i>
+    {{ error }}
+    <button class="btn-retry" (click)="loadProducts()">
+      <i class="fas fa-redo"></i>
+      Tekrar Dene
+    </button>
+  </div>
+
+  <!-- Success Message -->
+  <div class="alert alert-success" *ngIf="success">
+    <i class="fas fa-check-circle"></i>
+    {{ success }}
+  </div>
+
+  <!-- Products Grid -->
+  <div class="products-content" *ngIf="!loading && !error">
+    <div class="products-header">
+      <h3>
+        <i class="fas fa-grid-3x3"></i>
+        Ürünler ({{ filteredProducts.length }})
+      </h3>
+    </div>
+
+    <!-- Products Grid -->
+    <div class="products-grid" *ngIf="paginatedProducts.length > 0">
+      <div 
+        *ngFor="let product of paginatedProducts" 
+        class="product-card"
+        [class.unavailable]="!product.isAvailable"
+      >
+        <!-- Product Image -->
+        <div class="product-image">
+          <img 
+            *ngIf="product.image" 
+            [src]="product.image" 
+            [alt]="product.name"
+            (error)="onImageError($event)"
+          />
+          <div *ngIf="!product.image" class="image-placeholder">
+            <i class="fas fa-utensils"></i>
+          </div>
+          
+          <!-- Status Badge -->
+          <div class="status-badge" [class]="getStatusBadgeClass(product.isAvailable)">
+            <i [class]="product.isAvailable ? 'fas fa-check' : 'fas fa-times'"></i>
+            {{ getStatusText(product.isAvailable) }}
+          </div>
+
+          <!-- Price Badge -->
+          <div class="price-badge">
+            {{ formatPrice(product.price) }}
+          </div>
+        </div>
+
+        <!-- Product Content -->
+        <div class="product-content">
+          <div class="product-header">
+            <h4>{{ product.name }}</h4>
+            <button 
+              class="availability-toggle"
+              [class.available]="product.isAvailable"
+              [class.unavailable]="!product.isAvailable"
+              (click)="toggleAvailability(product)"
+              title="Durumu Değiştir"
+            >
+              <i [class]="product.isAvailable ? 'fas fa-toggle-on' : 'fas fa-toggle-off'"></i>
+            </button>
+          </div>
+
+          <p class="product-description" *ngIf="product.description">
+            {{ product.description }}
+          </p>
+
+          <!-- Category Info -->
+          <div class="category-info">
+            <div class="category-badge">
+              <i class="fas fa-tag"></i>
+              <span>{{ getCategoryName(product.categoryId) }}</span>
+            </div>
+          </div>
+
+          <!-- Company Info (for admin) -->
+          <div class="company-info" *ngIf="isAdmin">
+            <div class="company-badge">
+              <i class="fas fa-building"></i>
+              <span>{{ getCompanyName(product.companyId) }}</span>
+            </div>
+          </div>
+
+          <!-- Ingredients & Allergens -->
+          <div class="product-details" *ngIf="product.ingredients?.length || product.allergens?.length">
+            <div class="detail-item" *ngIf="product.ingredients?.length">
+              <i class="fas fa-list"></i>
+              <span class="detail-label">İçerikler:</span>
+              <span class="detail-value">{{ product.ingredients?.join(', ') }}</span>
+            </div>
+            <div class="detail-item allergens" *ngIf="product.allergens?.length">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span class="detail-label">Alerjenler:</span>
+              <span class="detail-value">{{ product.allergens?.join(', ') }}</span>
+            </div>
+          </div>
+
+          <!-- Product Meta -->
+          <div class="product-meta">
+            <div class="meta-item">
+              <i class="fas fa-calendar"></i>
+              <span>{{ product.createdAt | date:'dd/MM/yyyy' }}</span>
+            </div>
+            <div class="meta-item">
+              <i class="fas fa-clock"></i>
+              <span>{{ product.updatedAt | date:'HH:mm' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Product Actions -->
+        <div class="product-actions">
+          <button 
+            class="btn-action btn-edit" 
+            (click)="openEditModal(product)"
+            title="Düzenle"
+          >
+            <i class="fas fa-edit"></i>
+          </button>
+          <button 
+            class="btn-action btn-delete" 
+            (click)="openDeleteModal(product)"
+            title="Sil"
+            *ngIf="isAdmin || currentUser?.companyId === product.companyId"
+          >
+            <i class="fas fa-trash"></i>
+          </button>
+          <button 
+            class="btn-action btn-toggle" 
+            (click)="toggleAvailability(product)"
+            title="Durumu Değiştir"
+            [class.available]="product.isAvailable"
+          >
+            <i [class]="product.isAvailable ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="filteredProducts.length === 0">
+      <i class="fas fa-utensils"></i>
+      <h3>Ürün Bulunamadı</h3>
+      <p>Arama kriterlerinize uygun ürün bulunamadı.</p>
+      <button class="btn btn-primary" (click)="openCreateModal()">
+        <i class="fas fa-plus"></i>
+        İlk Ürünü Oluştur
+      </button>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="totalPages > 1">
+      <div class="pagination-info">
+        <span>
+          {{ (currentPage - 1) * itemsPerPage + 1 }} - 
+          {{ Math.min(currentPage * itemsPerPage, filteredProducts.length) }} 
+          / {{ filteredProducts.length }} ürün
+        </span>
+      </div>
+      <div class="pagination">
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === 1"
+          (click)="goToPage(currentPage - 1)"
+        >
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        
+        <button 
+          *ngFor="let page of pages" 
+          class="btn-page"
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        
+        <button 
+          class="btn-page" 
+          [disabled]="currentPage === totalPages"
+          (click)="goToPage(currentPage + 1)"
+        >
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal-overlay" *ngIf="showCreateModal || showEditModal" (click)="closeModals()">
+  <div class="modal modal-large" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-edit'"></i>
+        {{ showCreateModal ? 'Yeni Ürün Oluştur' : 'Ürün Düzenle' }}
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <form [formGroup]="productForm" (ngSubmit)="showCreateModal ? createProduct() : updateProduct()">
+        <div class="form-row">
+          <!-- Company Selection (for admin) -->
+          <div class="form-group" *ngIf="isAdmin">
+            <label for="companyId">
+              <i class="fas fa-building"></i>
+              Şirket *
+            </label>
+            <select
+              id="companyId"
+              formControlName="companyId"
+              [class.error]="companyId?.invalid && companyId?.touched"
+              (change)="loadCategories()"
+            >
+              <option value="">Şirket seçin</option>
+              <option *ngFor="let company of companies" [value]="company.id">
+                {{ company.name }}
+              </option>
+            </select>
+            <div class="error-message" *ngIf="companyId?.invalid && companyId?.touched">
+              <span *ngIf="companyId?.errors?.['required']">Şirket seçimi gereklidir</span>
+            </div>
+          </div>
+
+          <!-- Category Selection -->
+          <div class="form-group">
+            <label for="categoryId">
+              <i class="fas fa-tag"></i>
+              Kategori *
+            </label>
+            <select
+              id="categoryId"
+              formControlName="categoryId"
+              [class.error]="categoryId?.invalid && categoryId?.touched"
+            >
+              <option value="">Kategori seçin</option>
+              <option *ngFor="let category of categories" [value]="category.id">
+                {{ category.name }}
+              </option>
+            </select>
+            <div class="error-message" *ngIf="categoryId?.invalid && categoryId?.touched">
+              <span *ngIf="categoryId?.errors?.['required']">Kategori seçimi gereklidir</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <!-- Product Name -->
+          <div class="form-group">
+            <label for="name">
+              <i class="fas fa-utensils"></i>
+              Ürün Adı *
+            </label>
+            <input
+              type="text"
+              id="name"
+              formControlName="name"
+              placeholder="Ürün adını girin"
+              [class.error]="name?.invalid && name?.touched"
+            />
+            <div class="error-message" *ngIf="name?.invalid && name?.touched">
+              <span *ngIf="name?.errors?.['required']">Ürün adı gereklidir</span>
+              <span *ngIf="name?.errors?.['minlength']">Ürün adı en az 2 karakter olmalıdır</span>
+            </div>
+          </div>
+
+          <!-- Price -->
+          <div class="form-group">
+            <label for="price">
+              <i class="fas fa-lira-sign"></i>
+              Fiyat *
+            </label>
+            <input
+              type="number"
+              id="price"
+              formControlName="price"
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+              [class.error]="price?.invalid && price?.touched"
+            />
+            <div class="error-message" *ngIf="price?.invalid && price?.touched">
+              <span *ngIf="price?.errors?.['required']">Fiyat gereklidir</span>
+              <span *ngIf="price?.errors?.['min']">Fiyat 0'dan küçük olamaz</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+          <label for="description">
+            <i class="fas fa-align-left"></i>
+            Açıklama
+          </label>
+          <textarea
+            id="description"
+            formControlName="description"
+            placeholder="Ürün açıklamasını girin"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <!-- Image Upload -->
+        <div class="form-group">
+          <label for="image">
+            <i class="fas fa-image"></i>
+            Ürün Görseli
+          </label>
+          <div class="image-upload">
+            <input
+              type="file"
+              id="image"
+              accept="image/*"
+              (change)="onImageChange($event)"
+              #imageInput
+            />
+            <div class="image-preview" *ngIf="image?.value">
+              <img [src]="image?.value" alt="Ürün görseli" />
+              <button 
+                type="button" 
+                class="btn-remove-image"
+                (click)="productForm.patchValue({image: ''}); imageInput.value = ''"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="upload-placeholder" *ngIf="!image?.value">
+              <i class="fas fa-cloud-upload-alt"></i>
+              <span>Görsel yüklemek için tıklayın</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <!-- Ingredients -->
+          <div class="form-group">
+            <label for="ingredients">
+              <i class="fas fa-list"></i>
+              İçerikler
+            </label>
+            <textarea
+              id="ingredients"
+              formControlName="ingredients"
+              placeholder="İçerikleri virgülle ayırarak girin (örn: domates, peynir, zeytin)"
+              rows="2"
+            ></textarea>
+            <small class="form-hint">İçerikleri virgülle ayırarak girin</small>
+          </div>
+
+          <!-- Allergens -->
+          <div class="form-group">
+            <label for="allergens">
+              <i class="fas fa-exclamation-triangle"></i>
+              Alerjenler
+            </label>
+            <textarea
+              id="allergens"
+              formControlName="allergens"
+              placeholder="Alerjenleri virgülle ayırarak girin (örn: gluten, süt, yumurta)"
+              rows="2"
+            ></textarea>
+            <small class="form-hint">Alerjenleri virgülle ayırarak girin</small>
+          </div>
+        </div>
+
+        <!-- Nutrition Info -->
+        <div class="form-group">
+          <label for="nutritionInfo">
+            <i class="fas fa-chart-bar"></i>
+            Beslenme Bilgileri (JSON)
+          </label>
+          <textarea
+            id="nutritionInfo"
+            formControlName="nutritionInfo"
+            placeholder='{"kalori": 250, "protein": "15g", "karbonhidrat": "30g", "yag": "10g"}'
+            rows="3"
+          ></textarea>
+          <small class="form-hint">JSON formatında beslenme bilgilerini girin</small>
+        </div>
+
+        <!-- Status -->
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              formControlName="isAvailable"
+            />
+            <span class="checkmark"></span>
+            Ürün mevcut
+          </label>
+        </div>
+
+        <!-- Error Message -->
+        <div class="alert alert-error" *ngIf="error">
+          <i class="fas fa-exclamation-circle"></i>
+          {{ error }}
+        </div>
+
+        <!-- Success Message -->
+        <div class="alert alert-success" *ngIf="success">
+          <i class="fas fa-check-circle"></i>
+          {{ success }}
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" (click)="closeModals()">
+            <i class="fas fa-times"></i>
+            İptal
+          </button>
+          <button 
+            type="submit" 
+            class="btn btn-primary"
+            [disabled]="productForm.invalid || loading"
+          >
+            <span *ngIf="loading" class="spinner"></span>
+            <i *ngIf="!loading" [class]="showCreateModal ? 'fas fa-plus' : 'fas fa-save'"></i>
+            {{ loading ? 'İşleniyor...' : (showCreateModal ? 'Oluştur' : 'Güncelle') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showDeleteModal" (click)="closeModals()">
+  <div class="modal modal-small" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <i class="fas fa-exclamation-triangle"></i>
+        Ürün Sil
+      </h3>
+      <button class="btn-close" (click)="closeModals()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="delete-confirmation">
+        <div class="warning-icon">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="warning-content">
+          <h4>Bu işlem geri alınamaz!</h4>
+          <p>
+            <strong>{{ selectedProduct?.name }}</strong> ürününü silmek istediğinizden emin misiniz?
+            Bu işlem ürünle ilgili tüm verileri kalıcı olarak silecektir.
+          </p>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div class="alert alert-error" *ngIf="error">
+        <i class="fas fa-exclamation-circle"></i>
+        {{ error }}
+      </div>
+
+      <!-- Success Message -->
+      <div class="alert alert-success" *ngIf="success">
+        <i class="fas fa-check-circle"></i>
+        {{ success }}
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="closeModals()">
+          <i class="fas fa-times"></i>
+          İptal
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-danger"
+          [disabled]="loading"
+          (click)="deleteProduct()"
+        >
+          <span *ngIf="loading" class="spinner"></span>
+          <i *ngIf="!loading" class="fas fa-trash"></i>
+          {{ loading ? 'Siliniyor...' : 'Sil' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div> 
