@@ -213,8 +213,8 @@ export class AppComponent implements OnInit {
   }
 
   private loadNotifications(): void {
-    // TODO: Implement notification loading
-    this.notificationCount = 3; // Mock data
+    // TODO: Load actual notifications from API
+    this.notificationCount = 3; // Test value
   }
 
   private loadPendingOrders(): void {
